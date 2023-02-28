@@ -1,9 +1,12 @@
+
+# python C:\Users\Anthony\Desktop\PythonScript\x_x.py
+
 import pandas as pd
 import numpy as np
 from numpy import array
 import keras
 from keras import backend as K
-from keras.layers import Input, Dense, GRUCell, RNN, dot, concatenate, TimeDistributed, Layer, Activation
+from keras.layers import Input, Dense, GRUCell, RNN, concatenate, TimeDistributed, Layer
 import tensorflow as tf
 from tensorflow.keras import initializers
 tf.random.set_seed(69)
@@ -46,57 +49,42 @@ bias_initializer=tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.15, seed=
 def create_model(layers):  
     n_layers = len(layers)
     
-    encoder_inputs = keras.layers.Input(shape=(None, 1))
     ## Encoder
+    encoder_inputs = keras.layers.Input(shape=(None, 1))
     gru_cells = [keras.layers.GRUCell(hidden_dim, activation='tanh', dropout=.1, recurrent_initializer=initializer, kernel_initializer=kernel_initializer,bias_initializer=bias_initializer) for hidden_dim in layers]
+
     encoder = keras.layers.RNN(gru_cells, return_sequences=True, return_state=True)
     encoder_outputs_and_states = encoder(encoder_inputs)
     encoder_outputs, state_h, state_h2, state_h3, state_c = encoder(encoder_inputs)
-    
-    ## Encoder 2
-    lstm_cells = [keras.layers.GRUCell(hidden_dim, activation='relu', dropout=.2, recurrent_initializer=initializer, kernel_initializer=kernel_initializer,bias_initializer=bias_initializer) for hidden_dim in layers]
-    encoder2 = keras.layers.RNN(lstm_cells, return_sequences=True, return_state=True)
-    encoder_outputs_and_states2 = encoder2(encoder_inputs)
-    encoder_outputs2, state2_h, state2_h2, state2_h3, state2_c = encoder2(encoder_inputs)
-    
-    ## Combine partial states from both encoders 
-    evo_states = [state_h, state2_h2, state_h3, state2_c]
+    encoder_states = encoder_outputs_and_states[1:]
     
     ## Decoder
     decoder_inputs = keras.layers.Input(shape=(None, 1))
     decoder_cells = [keras.layers.GRUCell(hidden_dim, activation='tanh', dropout=.1, recurrent_initializer=initializer, kernel_initializer=kernel_initializer,bias_initializer=bias_initializer) for hidden_dim in layers]
     decoder_gru = keras.layers.RNN(decoder_cells, return_sequences=True, return_state=True)
 
-    decoder_outputs_and_states = decoder_gru(decoder_inputs, initial_state=evo_states)
-    [decoder_out, forward_h, forward_h2, forward_h3, forward_c] = decoder_gru(decoder_inputs, initial_state=evo_states)
+    decoder_outputs_and_states = decoder_gru(decoder_inputs, initial_state=encoder_states)
+    [decoder_out, forward_h, forward_h2, forward_h3, forward_c] = decoder_gru(decoder_inputs, initial_state=encoder_states)
     
-    ## Attention?
-    attention = dot([decoder_out, encoder_outputs], axes=[2, 2])
-    attn_activation = Activation('tanh')(attention)
-    context = dot([attn_activation, encoder_outputs], axes=[2,1])
-    attn_outputs = concatenate([context, decoder_out])
-    
-    ## Dense layers
     decoder_dense1 = Dense(10, activation='tanh', kernel_initializer=kernel_initializer,bias_initializer=bias_initializer)
-    decoder_outputs1 = decoder_dense1(attn_outputs)
+    decoder_outputs1 = decoder_dense1(decoder_out)
     decoder_dense2 = Dense(5, activation='relu', kernel_initializer=kernel_initializer,bias_initializer=bias_initializer)
-    decoder_outputs2 = decoder_dense2(attn_outputs)
+    decoder_outputs2 = decoder_dense2(decoder_out)
     
     merged = concatenate([decoder_outputs1, decoder_outputs2])
     
-    ## Output dense
     decoder_dense = TimeDistributed(Dense(1, activation='tanh'))
     decoder_outputs = decoder_dense(merged)
     
     model = keras.models.Model([encoder_inputs,decoder_inputs], decoder_outputs)
     return model
-    
+   
 neurons = 64
 
 model = create_model([neurons,neurons,neurons,neurons])
 batches = 1
 def run_model(model,batches,epochs,batch_size):
-    
+
     for _ in range(batches):
         input_seq, output_seq = generate_train_sequences(train_seq, n_steps, 1)
         encoder_input_data = input_seq
@@ -132,6 +120,7 @@ total_loss = [j for i in total_loss for j in i]
 total_val_loss = [j for i in total_val_loss for j in i]
 plot_loss(total_loss,total_val_loss)
 
+# create test data and make predictions
 test_xaxis = np.arange(0, 10*np.pi, 0.1)
 
 def test_function(x):
@@ -157,4 +146,5 @@ plt.title('GRU Approximation of Sine Function: MSE = ' + str(round(MSE,4)))
 plt.legend(loc='upper left')
 plt.ylim(-2, 2)
 plt.show()
+
 
