@@ -1,6 +1,4 @@
 
-# python C:\Users\Anthony\Desktop\PythonScript\x_x.py
-
 import pandas as pd
 import numpy as np
 from numpy import array
